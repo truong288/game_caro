@@ -333,7 +333,9 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============== MAIN ==========================
-app = ApplicationBuilder().token(TOKEN).build()
+def main():
+    TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("startgame", start_game))
@@ -346,4 +348,8 @@ app.add_handler(CommandHandler("win", show_win_stats))
 app.add_handler(CommandHandler("hep", show_rules))
 app.add_handler(CallbackQueryHandler(handle_move))
 app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
+
 app.run_polling()
+
+if __name__ == '__main__':
+    main()
