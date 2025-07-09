@@ -8,6 +8,10 @@ from dotenv import load_dotenv
 from telegram.ext import ApplicationBuilder
 from telegram.ext import MessageHandler, filters
 import asyncio
+from stay_alive import keep_alive
+
+keep_alive()
+
 
 # ==================== GLOBAL =====================
 players = {}
@@ -349,7 +353,9 @@ app.add_handler(CommandHandler("hep", show_rules))
 app.add_handler(CallbackQueryHandler(handle_move))
 app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 
+print("Bot is running...")
 app.run_polling()
+
 
 if __name__ == '__main__':
     main()
