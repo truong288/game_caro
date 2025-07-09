@@ -5,6 +5,7 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (ApplicationBuilder, CommandHandler,
                           CallbackQueryHandler, ContextTypes)
 from dotenv import load_dotenv
+from telegram.ext import ApplicationBuilder
 from telegram.ext import MessageHandler, filters
 import asyncio
 
@@ -332,8 +333,8 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============== MAIN ==========================
-load_dotenv()
-TOKEN = os.getenv("TOKEN")
+app = ApplicationBuilder().token(TOKEN).build()
+
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("startgame", start_game))
 app.add_handler(CommandHandler("join", join_game))
