@@ -1,3 +1,6 @@
-python-telegram-bot==20.6
+flask
+python-telegram-bot==20.3
+nest_asyncio
+telegram
 openpyxl
 python-dotenv
