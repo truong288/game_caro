@@ -1,1 +1,9 @@
-
+services:
+  - type: web
+    name: caro-telegram-bot
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python main.py"
+    envVars:
+      - key: TELEGRAM_TOKEN
+        value: 7856719282:AAHS8cC8Ljil-a1Cnjr84qazcmYXwzDv7-s
