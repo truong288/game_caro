@@ -49,6 +49,7 @@ def score_line(line, symbol):
 
     return score
 
+
 # Hàm đánh giá tổng thể bàn cờ
 def evaluate_board(board_np, symbol):
     score = 0
@@ -60,8 +61,8 @@ def evaluate_board(board_np, symbol):
         score += score_line(np.diag(board_np, k=i), symbol)
         score += score_line(np.diag(np.fliplr(board_np), k=i), symbol)
 
-    # Kiểm soát trung tâm (hệ thống bàn cờ 10x10)
-    central_area = [(4, 4), (4, 5), (5, 4), (5, 5)]  # Các ô trung tâm
+    # Kiểm soát trung tâm (hệ thống bàn cờ 10x8)
+    central_area = [(4, 4), (5, 4), (4, 5), (5, 5)]  # Các ô trung tâm gần giữa
     for x, y in central_area:
         if board_np[y][x] == symbol:
             score += 200  # Ưu tiên các ô trung tâm
@@ -85,13 +86,16 @@ def get_possible_moves(board_np):
                 for dy in range(-1, 2):
                     for dx in range(-1, 2):
                         nx, ny = x + dx, y + dy
-                        if 0 <= nx < board_np.shape[1] and 0 <= ny < board_np.shape[0]:
+                        if 0 <= nx < board_np.shape[
+                                1] and 0 <= ny < board_np.shape[0]:
                             if board_np[ny][nx] == "▫️":
                                 moves.add((nx, ny))
     return list(moves)
 
+
 # Thuật toán Minimax với Alpha-Beta Pruning
 def minimax(board_np, depth, alpha, beta, is_maximizing, symbol, opp):
+    # Kiểm tra xem đối thủ có thể thắng ngay lập tức không
     score = evaluate_board(board_np, symbol)
     if depth == 0 or abs(score) >= 10000:
         return score, None
@@ -105,7 +109,8 @@ def minimax(board_np, depth, alpha, beta, is_maximizing, symbol, opp):
         max_eval = -math.inf
         for x, y in moves:
             board_np[y][x] = symbol
-            eval, _ = minimax(board_np, depth - 1, alpha, beta, False, symbol, opp)
+            eval, _ = minimax(board_np, depth - 1, alpha, beta, False, symbol,
+                              opp)
             board_np[y][x] = "▫️"
             if eval > max_eval:
                 max_eval = eval
@@ -118,7 +123,8 @@ def minimax(board_np, depth, alpha, beta, is_maximizing, symbol, opp):
         min_eval = math.inf
         for x, y in moves:
             board_np[y][x] = opp
-            eval, _ = minimax(board_np, depth - 1, alpha, beta, True, symbol, opp)
+            eval, _ = minimax(board_np, depth - 1, alpha, beta, True, symbol,
+                              opp)
             board_np[y][x] = "▫️"
             if eval < min_eval:
                 min_eval = eval
@@ -128,35 +134,14 @@ def minimax(board_np, depth, alpha, beta, is_maximizing, symbol, opp):
                 break
         return min_eval, best
 
+
 # Hàm tính toán nước đi tốt nhất của bot
-def best_move(board, symbol, depth=2):
+def best_move(board, symbol, depth=3):  # Tăng độ sâu để bot chơi mạnh mẽ hơn
     board_np = np.array(board)
     opp = "⭕" if symbol == "❌" else "❌"
 
     _, move = minimax(board_np, depth, -math.inf, math.inf, True, symbol, opp)
     return move
-def on_player_move(x, y, board):
-    """ Xử lý nước đi của người chơi """
-    if board[y][x] == "▫️":  # Kiểm tra ô trống
-        board[y][x] = "❌"  # Người chơi đánh dấu X
-        update_board(board)  # Cập nhật giao diện ngay lập tức
-
-        # Tính toán nước đi của bot trong nền (background)
-        threading.Thread(target=bot_move, args=(board, "⭕")).start()
-
-# Hàm cập nhật giao diện người chơi
-def update_board(board):
-    """ Cập nhật giao diện người chơi """
-    # Vẽ lại giao diện, chỉ cập nhật những ô cần thiết
-    pass
-
-# Hàm tính toán nước đi của bot và cập nhật bảng
-def bot_move(board, symbol):
-    """ Tính toán nước đi của bot và cập nhật bảng """
-    best_move_pos = best_move(board, symbol, depth=2)  # Bot tìm nước đi tốt nhất
-    x, y = best_move_pos
-    board[y][x] = symbol
-    update_board(board)  # Cập nhật giao diện ngay sau khi bot đi
 
 
 # ============== SAVE TO EXCEL ==============
