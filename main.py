@@ -338,6 +338,7 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ============== MAIN ==========================
 def main():
+    load_dotenv()
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
