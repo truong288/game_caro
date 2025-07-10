@@ -117,11 +117,13 @@ async def turn_timeout(context, chat_id):
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if chat_id in games:
-    game = games[chat_id]
-    if len(game["players"]) == 2 or (len(game["players"]) == 1 and game.get("bot_play")):
-        await update.message.reply_text(
-            "⚠️ Trò chơi đang diễn ra.")
-        return
+        game = games[chat_id]
+        # Nếu đã có đủ 2 người hoặc 1 người + bot thì báo đang chơi
+        if len(game["players"]) == 2 or (len(game["players"]) == 1 and game.get("bot_play")):
+            await update.message.reply_text(
+                "⚠️ Trò chơi đang diễn ra.")
+            return
+    # Nếu chưa đủ người thì vẫn cho phép /startgame (reset dữ liệu cũ)
     games[chat_id] = {
         "board": [["▫️"] * 10 for _ in range(10)],
         "players": [],
@@ -135,6 +137,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🎮 Trò chơi bắt đầu!\n"
         "👉 Gõ \u2003/join \u2003 Để tham gia.\n"
         "👉 Gõ \u2003/joinbot\u2003Tham gia với bót.")
+
 
 
 async def join_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
