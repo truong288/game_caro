@@ -117,8 +117,10 @@ async def turn_timeout(context, chat_id):
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if chat_id in games:
+    game = games[chat_id]
+    if len(game["players"]) == 2 or (len(game["players"]) == 1 and game.get("bot_play")):
         await update.message.reply_text(
-            "⚠️ Trò chơi đang diễn ra. Dùng /reset để bắt đầu lại!")
+            "⚠️ Trò chơi đang diễn ra.")
         return
     games[chat_id] = {
         "board": [["▫️"] * 10 for _ in range(10)],
