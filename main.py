@@ -372,7 +372,7 @@ async def show_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔹/joinbot - Tham gia chơi với bot.\n"
         "🔹/reset - Làm mới game nhóm này.\n"
         "🔹/win - Xem thống kê thắng.\n"
-        "🔹/help - Xem hướng dẫn.\n"
+        "🔹/help - Xem hướng dẫn.\n\n"
         "📌 LUẬT CHƠI:\n\n"
         "-Khi 2 người tham gia hoặc tự chơi với bót, đủ người bàn tự hiện lên.\n"
         "👉 @xukaxuka2k1 codefree,fastandsecure👈")
