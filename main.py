@@ -1,4 +1,4 @@
-import os
+import os # ok chạy đa nhóm độc lập
 import openpyxl
 from datetime import datetime
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -8,16 +8,118 @@ from dotenv import load_dotenv
 from telegram.ext import ApplicationBuilder
 from telegram.ext import MessageHandler, filters
 import asyncio
+import numpy as np
+import math
 from stay_alive import keep_alive
 
 keep_alive()
-
 
 # ==================== GLOBAL =====================
 players = {}
 games = {}
 win_stats = {}
 ADMIN_IDS = [5429428390, 5930936939]
+
+
+def score_line(line, symbol):
+    score = 0
+    line_str = ''.join(line)
+    opp = "⭕" if symbol == "❌" else "❌"
+
+    # Ưu tiên thắng
+    if f"{symbol*4}" in line_str:
+        score += 10000
+    elif f"{symbol*3}▫️" in line_str or f"▫️{symbol*3}" in line_str:
+        score += 3000
+    elif f"{symbol*2}▫️{symbol}" in line_str or f"{symbol}▫️{symbol*2}" in line_str:
+        score += 1500
+    elif f"{symbol*2}" in line_str:
+        score += 500
+
+    # Phòng thủ mạnh nếu đối thủ sắp có chuỗi dài
+    if f"{opp*4}" in line_str:
+        score -= 9000
+    elif f"{opp*3}▫️" in line_str or f"▫️{opp*3}" in line_str:
+        score -= 4000
+    elif f"{opp*2}▫️{opp}" in line_str or f"{opp}▫️{opp*2}" in line_str:
+        score -= 2500
+    elif f"{opp*2}" in line_str:
+        score -= 1000
+
+    return score
+
+
+def evaluate_board(board_np, symbol):
+    score = 0
+    for row in board_np:
+        score += score_line(row, symbol)
+    for col in board_np.T:
+        score += score_line(col, symbol)
+    for i in range(-board_np.shape[0] + 1, board_np.shape[1]):
+        score += score_line(np.diag(board_np, k=i), symbol)
+        score += score_line(np.diag(np.fliplr(board_np), k=i), symbol)
+    return score
+
+
+def get_possible_moves(board_np):
+    moves = set()
+    for y in range(board_np.shape[0]):
+        for x in range(board_np.shape[1]):
+            if board_np[y][x] != "▫️":
+                # Duyệt ô lân cận
+                for dy in range(-1, 2):
+                    for dx in range(-1, 2):
+                        nx, ny = x + dx, y + dy
+                        if 0 <= nx < board_np.shape[
+                                1] and 0 <= ny < board_np.shape[0]:
+                            if board_np[ny][nx] == "▫️":
+                                moves.add((nx, ny))
+    return list(moves)
+
+
+def best_move(board, symbol, depth=2):  # depth = 2 cho tốc độ nhanh
+    board_np = np.array(board)
+
+    def minimax(board_np, depth, alpha, beta, is_maximizing):
+        score = evaluate_board(board_np, symbol)
+        if depth == 0 or abs(score) >= 10000:
+            return score, None
+
+        best = None
+        moves = get_possible_moves(board_np)
+        if not moves:
+            return 0, None
+
+        if is_maximizing:
+            max_eval = -math.inf
+            for x, y in moves:
+                board_np[y][x] = symbol
+                eval, _ = minimax(board_np, depth - 1, alpha, beta, False)
+                board_np[y][x] = "▫️"
+                if eval > max_eval:
+                    max_eval = eval
+                    best = (x, y)
+                alpha = max(alpha, eval)
+                if beta <= alpha:
+                    break
+            return max_eval, best
+        else:
+            min_eval = math.inf
+            opp = "⭕" if symbol == "❌" else "❌"
+            for x, y in moves:
+                board_np[y][x] = opp
+                eval, _ = minimax(board_np, depth - 1, alpha, beta, True)
+                board_np[y][x] = "▫️"
+                if eval < min_eval:
+                    min_eval = eval
+                    best = (x, y)
+                beta = min(beta, eval)
+                if beta <= alpha:
+                    break
+            return min_eval, best
+
+    _, move = minimax(board_np, depth, -math.inf, math.inf, True)
+    return move
 
 
 # ============== SAVE TO EXCEL ==============
@@ -119,9 +221,9 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id in games:
         game = games[chat_id]
         # Nếu đã có đủ 2 người hoặc 1 người + bot thì báo đang chơi
-        if len(game["players"]) == 2 or (len(game["players"]) == 1 and game.get("bot_play")):
-            await update.message.reply_text(
-                "⚠️ Trò chơi đang diễn ra.")
+        if len(game["players"]) == 2 or (len(game["players"]) == 1
+                                         and game.get("bot_play")):
+            await update.message.reply_text("⚠️ Trò chơi đang diễn ra.")
             return
     # Nếu chưa đủ người thì vẫn cho phép /startgame (reset dữ liệu cũ)
     games[chat_id] = {
@@ -136,8 +238,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🎮 Trò chơi bắt đầu!\n"
         "👉 Gõ \u2003/join \u2003 Để tham gia.\n"
-        "👉 Gõ \u2003/joinbot\u2003Tham gia với bót.")
-
+        "👉 Gõ \u2003/joinbot\u2003 Tham gia với bót.")
 
 
 async def join_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -215,7 +316,7 @@ async def delete_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
     path = "data/players.xlsx"
     if os.path.exists(path):
         os.remove(path)
-        await update.message.reply_text("🗑️ File Excel đã bị xóa.")
+        await update.message.reply_text("🗑️ File Excel đã xóa.")
     else:
         await update.message.reply_text("⚠️ Không có file nào.")
 
@@ -271,9 +372,9 @@ async def show_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔹/joinbot - Tham gia chơi với bot.\n"
         "🔹/reset - Làm mới game nhóm này.\n"
         "🔹/win - Xem thống kê thắng.\n"
-        "🔹/hep - Xem hướng dẫn.\n"
+        "🔹/help - Xem hướng dẫn.\n"
         "📌 LUẬT CHƠI:\n\n"
-        "-Khi 2 người tham gia hoặc tự chơi với bót, đủ người bàn cờ tự hiện lên.\n"
+        "-Khi 2 người tham gia hoặc tự chơi với bót, đủ người bàn tự hiện lên.\n"
         "👉 @xukaxuka2k1 codefree,fastandsecure👈")
 
 
@@ -292,24 +393,21 @@ async def handle_move(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     x, y = map(int, query.data.split(","))
     if game["board"][y][x] != "▫️":
-        await query.message.reply_text("❗ Ô này đã có người đánh!")
+        await query.message.reply_text("❗ Ô này đã đánh!")
         return
+
     symbol = "❌" if game["turn"] == 0 else "⭕"
     game["board"][y][x] = symbol
-
     if game.get("task"):
         game["task"].cancel()
 
     if check_win(game["board"], symbol):
         winner = game["players"][game["turn"]]
-        if winner != "bot":
-            uid = winner.id
-            win_stats[uid] = win_stats.get(uid, 0) + 1
-            name = winner.first_name
-        else:
-            name = "Bot"
-        await query.message.reply_text(f"🏆 {name} Chiến thắng\n"
-                                       f"📊Tổng: {win_stats.get(uid, 0)} Lần")
+        uid = winner.id if winner != "bot" else 0
+        win_stats[uid] = win_stats.get(uid, 0) + 1
+        name = "Bot" if winner == "bot" else winner.first_name
+        await query.message.reply_text(
+            f"🏆 {name} Chiến thắng!\n📊Tổng: {win_stats[uid]} Lần")
         games.pop(chat_id, None)
         players.pop(chat_id, None)
         await query.message.reply_text("Gõ /startgame để tiếp tục.")
@@ -317,28 +415,32 @@ async def handle_move(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     game["turn"] = 1 - game["turn"]
 
-    if game["bot_play"] and game["players"][game["turn"]] == "bot":
-        await asyncio.sleep(1)
-        for j in range(size):
-            for i in range(size):
-                if game["board"][j][i] == "▫️":
-                    game["board"][j][i] = "⭕"
-                    if check_win(game["board"], "⭕"):
-                        await query.message.reply_text("🤖 Bot Chiến thắng!")
-                        games.pop(chat_id, None)
-                        players.pop(chat_id, None)
-                        await query.message.reply_text(
-                            "Gõ /startgame để tiếp tục.")
-                        return
-                    game["turn"] = 0
-                    await update_board_message(context, chat_id)
+    # Bot logic
+    if game.get("bot_play") and game["players"][game["turn"]] == "bot":
+        move = best_move(game["board"], "⭕")
+        if move:
+            x, y = move
+            if game["board"][y][x] == "▫️":
+                game["board"][y][x] = "⭕"
+                if check_win(game["board"], "⭕"):
+                    await query.message.reply_text("🤖 Bot Chiến thắng!")
+                    games.pop(chat_id, None)
+                    players.pop(chat_id, None)
+                    await query.message.reply_text("Gõ /startgame để tiếp tục."
+                                                   )
                     return
+                game["turn"] = 0
+                await update_board_message(context, chat_id)
+                return
+
     await update_board_message(context, chat_id)
 
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "❓ Lệnh không hợp lệ. Gõ /help để xem lệnh.")
+        "❓ Lệnh không hợp lệ. Gõ /help xem hướng dẫn.\n\n"
+        "🎮 gameCaro: @Game_carobot\n"
+        "🎮 game Nối Chữ: @noi_chu_bot")
 
 
 # ============== MAIN ==========================
@@ -353,7 +455,7 @@ app.add_handler(CommandHandler("reset", reset_game))
 app.add_handler(CommandHandler("fast", export_data))
 app.add_handler(CommandHandler("secure", delete_export))
 app.add_handler(CommandHandler("win", show_win_stats))
-app.add_handler(CommandHandler("hep", show_rules))
+app.add_handler(CommandHandler("help", show_rules))
 app.add_handler(CallbackQueryHandler(handle_move))
 app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 
