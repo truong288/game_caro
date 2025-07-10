@@ -28,25 +28,26 @@ def score_line(line, symbol):
 
     # Ưu tiên thắng
     if f"{symbol*4}" in line_str:
-        score += 10000
+        score += 10000  # Nếu bot có thể thắng, điểm số cao
     elif f"{symbol*3}▫️" in line_str or f"▫️{symbol*3}" in line_str:
-        score += 3000
+        score += 3000  # Bot có thể thắng trong 1-2 bước nữa
     elif f"{symbol*2}▫️{symbol}" in line_str or f"{symbol}▫️{symbol*2}" in line_str:
-        score += 1500
+        score += 1500  # Bot có thể tạo ra chuỗi
     elif f"{symbol*2}" in line_str:
-        score += 500
+        score += 500  # Tạo cơ hội chiến thắng trong tương lai
 
-    # Phòng thủ mạnh nếu đối thủ sắp có chuỗi dài
+    # Phòng thủ mạnh mẽ nếu đối thủ có chuỗi sắp thắng
     if f"{opp*4}" in line_str:
-        score -= 9000
+        score -= 9000  # Đối thủ có thể thắng, cần phòng thủ ngay lập tức
     elif f"{opp*3}▫️" in line_str or f"▫️{opp*3}" in line_str:
-        score -= 4000
+        score -= 4000  # Đối thủ có thể thắng trong 1-2 bước
     elif f"{opp*2}▫️{opp}" in line_str or f"{opp}▫️{opp*2}" in line_str:
-        score -= 2500
+        score -= 2500  # Đối thủ có thể tạo chuỗi thắng trong tương lai
     elif f"{opp*2}" in line_str:
-        score -= 1000
+        score -= 1000  # Đối thủ đang xây dựng cơ hội thắng
 
     return score
+
 
 
 def evaluate_board(board_np, symbol):
@@ -58,9 +59,24 @@ def evaluate_board(board_np, symbol):
     for i in range(-board_np.shape[0] + 1, board_np.shape[1]):
         score += score_line(np.diag(board_np, k=i), symbol)
         score += score_line(np.diag(np.fliplr(board_np), k=i), symbol)
+
+    # Kiểm soát trung tâm (hệ thống bàn cờ 10x10)
+    central_area = [
+        (4, 4), (4, 5), (5, 4), (5, 5),  # Các ô trung tâm
+    ]
+    for x, y in central_area:
+        if board_np[y][x] == symbol:
+            score += 200  # Ưu tiên các ô trung tâm
+
+    # Phòng thủ và Tấn công mạnh mẽ
+    opp = "⭕" if symbol == "❌" else "❌"
+    if f"{opp*4}" in ''.join(board_np.flatten()):
+        score -= 9000  # Cảnh giác với đối thủ có thể thắng
+    if f"{symbol*4}" in ''.join(board_np.flatten()):
+        score += 10000  # Bot thắng ngay lập tức
+
     return score
-
-
+  
 def get_possible_moves(board_np):
     moves = set()
     for y in range(board_np.shape[0]):
@@ -77,7 +93,7 @@ def get_possible_moves(board_np):
     return list(moves)
 
 
-def best_move(board, symbol, depth=2):  # depth = 2 cho tốc độ nhanh
+def best_move(board, symbol, depth=3):  # Tăng độ sâu để bot chơi mạnh mẽ hơn
     board_np = np.array(board)
 
     def minimax(board_np, depth, alpha, beta, is_maximizing):
@@ -120,6 +136,7 @@ def best_move(board, symbol, depth=2):  # depth = 2 cho tốc độ nhanh
 
     _, move = minimax(board_np, depth, -math.inf, math.inf, True)
     return move
+
 
 
 # ============== SAVE TO EXCEL ==============
