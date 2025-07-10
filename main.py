@@ -341,7 +341,6 @@ def main():
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("startgame", start_game))
 app.add_handler(CommandHandler("join", join_game))
 app.add_handler(CommandHandler("joinbot", join_bot))
