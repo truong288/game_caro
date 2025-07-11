@@ -1,4 +1,4 @@
-import os    # ok chạy đa nhóm độc lập giúp bót nhanh hơn
+import os   # ok chạy đa nhóm độc lập giúp bót nhanh hơn thông mình hơn
 import openpyxl
 from datetime import datetime
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -7,11 +7,11 @@ from telegram.ext import (ApplicationBuilder, CommandHandler,
 from dotenv import load_dotenv
 from telegram.ext import ApplicationBuilder
 from telegram.ext import MessageHandler, filters
+from stay_alive import keep_alive
 import asyncio
 import numpy as np
 import threading
 import math
-from stay_alive import keep_alive
 
 keep_alive()
 
@@ -27,25 +27,31 @@ def score_line(line, symbol):
     line_str = ''.join(line)
     opp = "⭕" if symbol == "❌" else "❌"
 
-    # Ưu tiên thắng
+    # --- TẤN CÔNG ---
     if f"{symbol*4}" in line_str:
-        score += 10000  # Nếu bot có thể thắng, điểm số cao
+        score += 10000  # Thắng
     elif f"{symbol*3}▫️" in line_str or f"▫️{symbol*3}" in line_str:
-        score += 3000  # Bot có thể thắng trong 1-2 bước nữa
+        score += 4000  # Sắp thắng
     elif f"{symbol*2}▫️{symbol}" in line_str or f"{symbol}▫️{symbol*2}" in line_str:
-        score += 1500  # Bot có thể tạo ra chuỗi
+        score += 2000  # Chuỗi đẹp
+    elif f"▫️{symbol*2}▫️" in line_str:
+        score += 1500  # 2 ô giữa trống 2 đầu
     elif f"{symbol*2}" in line_str:
-        score += 500  # Tạo cơ hội chiến thắng trong tương lai
+        score += 800  # Mới tạo chuỗi
 
-    # Phòng thủ mạnh mẽ nếu đối thủ có chuỗi sắp thắng
-    if f"{opp*4}" in line_str:
-        score -= 9000  # Đối thủ có thể thắng, cần phòng thủ ngay lập tức
-    elif f"{opp*3}▫️" in line_str or f"▫️{opp*3}" in line_str:
-        score -= 4000  # Đối thủ có thể thắng trong 1-2 bước
+    # --- PHÒNG THỦ ---
+    if f"▫️{opp*2}▫️" in line_str:  
+        score -= 6000  
+    if f"{opp*3}▫️" in line_str or f"▫️{opp*3}" in line_str:
+        score -= 6000  
+    elif f"▫️{opp*3}▫️" in line_str:
+        score -= 8000  
     elif f"{opp*2}▫️{opp}" in line_str or f"{opp}▫️{opp*2}" in line_str:
-        score -= 2500  # Đối thủ có thể tạo chuỗi thắng trong tương lai
+        score -= 3000  
+    elif f"▫️{opp*2}▫️" in line_str:
+        score -= 4000  
     elif f"{opp*2}" in line_str:
-        score -= 1000  # Đối thủ đang xây dựng cơ hội thắng
+        score -= 1500  # Cảnh báo sớm
 
     return score
 
@@ -62,7 +68,7 @@ def evaluate_board(board_np, symbol):
         score += score_line(np.diag(np.fliplr(board_np), k=i), symbol)
 
     # Kiểm soát trung tâm (hệ thống bàn cờ 10x8)
-    central_area = [(4, 4), (5, 4), (4, 5), (5, 5)]  # Các ô trung tâm gần giữa
+    central_area = [(3, 4), (4, 3), (3, 3), (4, 4)] 
     for x, y in central_area:
         if board_np[y][x] == symbol:
             score += 200  # Ưu tiên các ô trung tâm
@@ -70,7 +76,7 @@ def evaluate_board(board_np, symbol):
     # Phòng thủ và Tấn công mạnh mẽ
     opp = "⭕" if symbol == "❌" else "❌"
     if f"{opp*4}" in ''.join(board_np.flatten()):
-        score -= 9000  # Cảnh giác với đối thủ có thể thắng
+        score -= 9000  
     if f"{symbol*4}" in ''.join(board_np.flatten()):
         score += 10000  # Bot thắng ngay lập tức
 
@@ -136,10 +142,56 @@ def minimax(board_np, depth, alpha, beta, is_maximizing, symbol, opp):
 
 
 # Hàm tính toán nước đi tốt nhất của bot
-def best_move(board, symbol, depth=3):  # Tăng độ sâu để bot chơi mạnh mẽ hơn
+def best_move(board, symbol, depth=3):
     board_np = np.array(board)
     opp = "⭕" if symbol == "❌" else "❌"
 
+    # --- ƯU TIÊN THẮNG NGAY ---
+    for x, y in get_possible_moves(board_np):
+        board_np[y][x] = symbol
+        if check_win(board_np.tolist(), symbol):
+            board_np[y][x] = "▫️"
+            return (x, y)
+        board_np[y][x] = "▫️"
+
+    # --- ƯU TIÊN CHẶN THUA NGAY ---
+    for x, y in get_possible_moves(board_np):
+        board_np[y][x] = opp
+        if check_win(board_np.tolist(), opp):
+            board_np[y][x] = "▫️"
+            return (x, y)
+        board_np[y][x] = "▫️"
+
+    # --- CHẶN ▫️❌❌▫️ ---
+    for y in range(board_np.shape[0]):
+        for x in range(board_np.shape[1]):
+            for dx, dy in [(1, 0), (0, 1), (1, 1), (-1, 1)]:
+                try:
+                    cells = [(x + i * dx, y + i * dy) for i in range(4)]
+                    values = [board_np[yy][xx] for xx, yy in cells]
+                    if values == ["▫️", opp, opp, "▫️"]:
+                        if board_np[cells[0][1]][cells[0][0]] == "▫️":
+                            return cells[0]
+                        if board_np[cells[3][1]][cells[3][0]] == "▫️":
+                            return cells[3]
+                except IndexError:
+                    continue
+
+    # --- CHẶN NGUY HIỂM KHÁC ---
+    for x, y in get_possible_moves(board_np):
+        board_np[y][x] = opp
+        patterns_to_check = [
+            ''.join(board_np[y]), ''.join(board_np[:, x]),
+            ''.join(np.diag(board_np, x - y)), ''.join(
+                np.diag(np.fliplr(board_np), (board_np.shape[1] - 1 - x) - y))
+        ]
+        for line_str in patterns_to_check:
+            if opp * 2 in line_str and '▫️' in line_str:
+                board_np[y][x] = "▫️"
+                return (x, y)
+        board_np[y][x] = "▫️"
+
+    # --- MINIMAX ---
     _, move = minimax(board_np, depth, -math.inf, math.inf, True, symbol, opp)
     return move
 
@@ -196,23 +248,33 @@ async def update_board_message(context, chat_id):
 
 # ============== KIỂM TRA THẮNG ==============
 def check_win(board, symbol):
-    size = len(board)
-    for y in range(size):
-        for x in range(size - 3):
+    size_y = len(board)  
+    size_x = len(board[0])  
+
+    # Kiểm tra ngang
+    for y in range(size_y):
+        for x in range(size_x - 3):  
             if all(board[y][x + i] == symbol for i in range(4)):
                 return True
-    for x in range(size):
-        for y in range(size - 3):
+
+    # Kiểm tra dọc
+    for x in range(size_x):
+        for y in range(size_y - 3):  
             if all(board[y + i][x] == symbol for i in range(4)):
                 return True
-    for y in range(size - 3):
-        for x in range(size - 3):
+
+    # Kiểm tra chéo chính
+    for y in range(size_y - 3):
+        for x in range(size_x - 3):
             if all(board[y + i][x + i] == symbol for i in range(4)):
                 return True
-    for y in range(size - 3):
-        for x in range(3, size):
+
+    # Kiểm tra chéo phụ
+    for y in range(size_y - 3):
+        for x in range(3, size_x):
             if all(board[y + i][x - i] == symbol for i in range(4)):
                 return True
+
     return False
 
 
@@ -230,11 +292,11 @@ async def turn_timeout(context, chat_id):
         chat_id=chat_id,
         text=f"⏱ {loser.first_name} Hết thời gian!\n"
         f"👑{winner.first_name} Chiến thắng.\n"
-        f"📊Tổng: {win_stats[uid]} Lần")
+        f"📊Tổng: {win_stats[uid]} Ván")
     games.pop(chat_id, None)
     players.pop(chat_id, None)
     await context.bot.send_message(chat_id=chat_id,
-                                   text="Gõ /startgame để tiếp tục.")
+                                   text="Gõ /startgame Để tiếp tục.")
 
 
 # ============== COMMAND HANDLERS ==============
@@ -249,7 +311,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
     # Nếu chưa đủ người thì vẫn cho phép /startgame (reset dữ liệu cũ)
     games[chat_id] = {
-        "board": [["▫️"] * 10 for _ in range(10)],
+        "board": [["▫️"] * 8 for _ in range(10)],
         "players": [],
         "turn": 0,
         "task": None,
@@ -268,7 +330,7 @@ async def join_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if chat_id not in games:
         await update.message.reply_text(
-            "⚠️ Hãy dùng /startgame để bắt đầu trước.")
+            "⚠️ Hãy dùng /startgame Để bắt đầu trước.")
         return
     if user.id not in players[chat_id]:
         players[chat_id].append(user.id)
@@ -294,7 +356,7 @@ async def join_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if chat_id not in games:
         await update.message.reply_text(
-            "⚠️ Hãy dùng /startgame để bắt đầu trước.")
+            "⚠️ Hãy dùng /startgame Để bắt đầu trước.")
         return
     if user.id not in players[chat_id]:
         players[chat_id].append(user.id)
@@ -356,9 +418,9 @@ async def show_win_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 user_obj = await context.bot.get_chat_member(chat_id, user_id)
                 name = user_obj.user.full_name
-                msg += f"- {name} (ID {user_id}): {count} lần\n"
+                msg += f"- {name} (ID {user_id}): {count} Ván\n"
             except:
-                msg += f"- ID {user_id}: {count} lần\n"
+                msg += f"- ID {user_id}: {count} Ván\n"
         await update.message.reply_text(msg)
     else:
         result = {}
@@ -380,9 +442,9 @@ async def show_win_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 member = await context.bot.get_chat_member(chat_id, uid)
                 name = member.user.full_name
-                msg += f"- {name}: {count} lần\n"
+                msg += f"- {name}: {count} Ván\n"
             except:
-                msg += f"- ID {uid}: {count} lần\n"
+                msg += f"- ID {uid}: {count} Ván\n"
         await update.message.reply_text(msg)
 
 
@@ -406,13 +468,15 @@ async def handle_move(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     chat_id = query.message.chat.id
     user = query.from_user
+
     if chat_id not in games:
         return
     game = games[chat_id]
-    if game["players"][game["turn"]] != user and game["players"][
-            game["turn"]] != "bot":
+
+    if game["players"][game["turn"]] != user:
         await query.message.reply_text("⛔ Không đến lượt bạn!")
         return
+
     x, y = map(int, query.data.split(","))
     if game["board"][y][x] != "▫️":
         await query.message.reply_text("❗ Ô này đã đánh!")
@@ -420,8 +484,12 @@ async def handle_move(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     symbol = "❌" if game["turn"] == 0 else "⭕"
     game["board"][y][x] = symbol
+
     if game.get("task"):
         game["task"].cancel()
+
+    # 🟢 CẬP NHẬT NGAY CHO NGƯỜI CHƠI THẤY Ô MÌNH ĐÁNH
+    await update_board_message(context, chat_id)
 
     if check_win(game["board"], symbol):
         winner = game["players"][game["turn"]]
@@ -429,31 +497,32 @@ async def handle_move(update: Update, context: ContextTypes.DEFAULT_TYPE):
         win_stats[uid] = win_stats.get(uid, 0) + 1
         name = "Bot" if winner == "bot" else winner.first_name
         await query.message.reply_text(
-            f"🏆 {name} Chiến thắng!\n📊Tổng: {win_stats[uid]} Lần")
+            f"🏆 {name} Chiến thắng!\n📊Tổng: {win_stats[uid]} Ván")
         games.pop(chat_id, None)
         players.pop(chat_id, None)
-        await query.message.reply_text("Gõ /startgame để tiếp tục.")
+        await query.message.reply_text("Gõ /startgame Để tiếp tục.")
         return
 
     game["turn"] = 1 - game["turn"]
 
-    # Bot logic
+    # 🟢 Nếu tới lượt bot
     if game.get("bot_play") and game["players"][game["turn"]] == "bot":
+        await asyncio.sleep(1)
         move = best_move(game["board"], "⭕")
         if move:
             x, y = move
             if game["board"][y][x] == "▫️":
                 game["board"][y][x] = "⭕"
                 if check_win(game["board"], "⭕"):
-                    await query.message.reply_text("🤖 Bot Chiến thắng!")
+                    win_stats[0] = win_stats.get(0, 0) + 1
+                    await query.message.reply_text(
+                        f"🤖 Bot Chiến thắng!\n📊Tổng: {win_stats[0]} Ván")
                     games.pop(chat_id, None)
                     players.pop(chat_id, None)
-                    await query.message.reply_text("Gõ /startgame để tiếp tục."
+                    await query.message.reply_text("Gõ /startgame Để tiếp tục."
                                                    )
                     return
                 game["turn"] = 0
-                await update_board_message(context, chat_id)
-                return
 
     await update_board_message(context, chat_id)
 
