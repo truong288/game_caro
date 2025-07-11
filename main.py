@@ -458,7 +458,8 @@ async def show_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔹/win - Xem thống kê thắng.\n"
         "🔹/help - Xem hướng dẫn.\n\n"
         "📌 LUẬT CHƠI:\n\n"
-        "-Khi 2 người tham gia hoặc tự chơi với bót, đủ người bàn tự hiện lên.\n"
+        "- Khi 2 người tham gia hoặc tự chơi với bót, đủ người bàn tự hiện lên.\n"
+        "- 4 điểm thẳng hàng giành chiến .\n"
         "👉 @xukaxuka2k1 codefree,fastandsecure👈")
 
 
