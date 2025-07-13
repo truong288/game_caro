@@ -1,4 +1,4 @@
-import os  # ok ok chạy đa nhóm độc lập giúp bót nhanh hơn thông mình hơn
+import os  # ok ok tới lượt người chơi với bót rõ ràng
 import openpyxl
 from datetime import datetime
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -13,8 +13,8 @@ import numpy as np
 import threading
 import math
 
-keep_alive()
 
+keep_alive()
 # ==================== GLOBAL =====================
 players = {}
 games = {}
@@ -213,12 +213,16 @@ async def update_board_message(context, chat_id, show_turn=True):
     markup = create_board_keyboard(board)
 
     if show_turn:
-        current_player = game["players"][game["turn"]]
-        if current_player != "bot":
-            username = f"@{current_player.username}" if current_player.username else current_player.first_name
+        current_player = game["players"][
+            game["turn"]]  # Sửa từ "ccurrent_player" thành "current_player"
+        symbol = "❌" if game[
+            "turn"] == 0 else "⭕"  # Cách xác định symbol đơn giản hơn
+
+        if current_player == "bot":
+            message = f"🤖 Đến lượt Bot ({symbol})"
         else:
-            username = "🤖 Bot"
-        message = f"Đến lượt: {username}"
+            username = f"@{current_player.username}" if current_player.username else current_player.first_name
+            message = f"👤 Đến lượt {username} ({symbol})"
     else:
         message = "🎯 Trận đấu kết thúc!"
 
@@ -230,7 +234,6 @@ async def update_board_message(context, chat_id, show_turn=True):
     except:
         pass
 
-    # Khởi động lại đồng hồ nếu game chưa kết thúc
     if game.get("task"):
         game["task"].cancel()
 
@@ -322,7 +325,7 @@ async def turn_timeout(context, chat_id):
 
     # Gợi ý chơi tiếp
     await context.bot.send_message(chat_id=chat_id,
-                                   text="👉 Gõ /startgame để bắt đầu ván mới.")
+                                   text="👉 Gõ /startgame Bắt đầu ván mới..")
 
 
 # ============== COMMAND HANDLERS ==============
@@ -333,7 +336,8 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Nếu đã có đủ 2 người hoặc 1 người + bot thì báo đang chơi
         if len(game["players"]) == 2 or (len(game["players"]) == 1
                                          and game.get("bot_play")):
-            await update.message.reply_text("⚠️ Trò chơi đang diễn ra.")
+            await context.bot.send_message(chat_id=chat_id,
+                                           text="⚠️ Trò chơi đang diễn ra.")
             return
     # Nếu chưa đủ người thì vẫn cho phép /startgame (reset dữ liệu cũ)
     games[chat_id] = {
@@ -345,23 +349,24 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "bot_play": False
     }
     players[chat_id] = []
-    await update.message.reply_text(
-        "🎮 Trò chơi bắt đầu!\n"
-        "👉 Gõ \u2003/join \u2003 Để tham gia.\n"
-        "👉 Gõ \u2003/joinbot\u2003 Tham gia với bót.")
+    await context.bot.send_message(chat_id=chat_id,
+                                   text="🎮 Trò chơi bắt đầu!\n"
+                                   "👉 Gõ /join   Để tham gia.\n"
+                                   "👉 Gõ /joinbot  Tham gia với bót.")
 
 
 async def join_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user = update.effective_user
     if chat_id not in games:
-        await update.message.reply_text(
-            "⚠️ Hãy dùng /startgame Để bắt đầu trước.")
+        await context.bot.send_message(chat_id=chat_id,
+                                       text="👉 Gõ /startgame Bắt đầu ván mới.")
         return
     if user.id not in players[chat_id]:
         players[chat_id].append(user.id)
         games[chat_id]["players"].append(user)
-        await update.message.reply_text(f"✅ {user.first_name} Đã tham gia!")
+        await context.bot.send_message(
+            chat_id=chat_id, text=f"✅ {user.first_name} Đã tham gia!")
         await save_player_to_excel(user.full_name, user.username,
                                    datetime.now())
 
@@ -381,15 +386,16 @@ async def join_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user = update.effective_user
     if chat_id not in games:
-        await update.message.reply_text(
-            "⚠️ Hãy dùng /startgame Để bắt đầu trước.")
+        await context.bot.send_message(chat_id=chat_id,
+                                       text="👉 Gõ /startgame Bắt đầu ván mới.")
         return
     if user.id not in players[chat_id]:
         players[chat_id].append(user.id)
         games[chat_id]["players"].append(user)
         games[chat_id]["players"].append("bot")
         games[chat_id]["bot_play"] = True
-        await update.message.reply_text(f"✅ {user.first_name} chơi với bot!")
+        await context.bot.send_message(
+            chat_id=chat_id, text=f"✅ {user.first_name} chơi với bot!")
         await save_player_to_excel(user.full_name, user.username,
                                    datetime.now())
 
@@ -407,50 +413,83 @@ async def join_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
+    path = "data/players.xlsx"
 
     if user_id in ADMIN_IDS:
-        # ADMIN reset: Xoá toàn bộ thống kê win_stats
-        win_stats.clear()
-        await update.message.reply_text("🛑 Admin đã reset toàn bộ.")
+        # ADMIN reset: 
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+            win_stats.clear()
+            await context.bot.send_message(chat_id=chat_id,
+                                           text="🛑 Đã reset toàn bộ.")
+        except Exception as e:
+            await context.bot.send_message(chat_id=chat_id,
+                                           text=f"❌ Lỗi khi reset: {str(e)}")
         return
 
-    # Người thường reset: chỉ reset game và thống kê của nhóm hiện tại
-    if chat_id in games:
-        if games[chat_id].get("task"):
-            games[chat_id]["task"].cancel()
-        games.pop(chat_id, None)
-        players.pop(chat_id, None)
+    # Reset thông thường
+    try:
+        if chat_id in games:
+            if games[chat_id].get("task"):
+                games[chat_id]["task"].cancel()
+            games.pop(chat_id, None)
+            players.pop(chat_id, None)
 
-    # Xoá thống kê win của người trong nhóm hiện tại
-    to_delete = []
-    for uid, data in win_stats.items():
-        try:
-            member = await context.bot.get_chat_member(chat_id, uid)
-            if member.status in ("member", "administrator", "creator"):
-                to_delete.append(uid)
-        except:
-            continue
-    for uid in to_delete:
-        win_stats.pop(uid, None)
+        # Xóa thống kê trong nhóm
+        to_delete = [uid for uid in win_stats
+                     if uid != 0]  
+        for uid in to_delete:
+            try:
+                member = await context.bot.get_chat_member(chat_id, uid)
+                if member.status in ("member", "administrator", "creator"):
+                    win_stats.pop(uid, None)
+            except:
+                continue
 
-    await update.message.reply_text("♻️ Đã reset game và thống kê!")
+        await context.bot.send_message(chat_id=chat_id,
+                                       text="♻️ Đã reset game và thống kê!")
+    except Exception as e:
+        await context.bot.send_message(chat_id=chat_id,
+                                       text=f"❌ Lỗi khi reset: {str(e)}")
 
 
 async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
     path = "data/players.xlsx"
-    if os.path.exists(path):
-        await update.message.reply_document(open(path, "rb"))
-    else:
-        await update.message.reply_text("⚠️ Chưa có ai tham.")
+
+    try:
+        if not os.path.exists(path):
+            await context.bot.send_message(chat_id=chat_id,
+                                           text="⚠️ Chưa có dữ liệu.")
+            return
+
+        with open(path, "rb") as file:
+            await context.bot.send_document(chat_id=chat_id,
+                                            document=file,
+                                            filename="players_data.xlsx",
+                                            caption="📊 Dữ liệu người chơi")
+    except Exception as e:
+        await context.bot.send_message(
+            chat_id=chat_id, text=f"❌ Lỗi khi xuất dữ liệu: {str(e)}")
 
 
 async def delete_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
     path = "data/players.xlsx"
-    if os.path.exists(path):
+
+    try:
+        if not os.path.exists(path):
+            await context.bot.send_message(chat_id=chat_id,
+                                           text="⚠️ Không tìm thấy file.")
+            return
+
         os.remove(path)
-        await update.message.reply_text("🗑️ File Excel đã xóa.")
-    else:
-        await update.message.reply_text("⚠️ Không có file nào.")
+        await context.bot.send_message(chat_id=chat_id,
+                                       text="🗑️ Đã xóa file thành công!")
+    except Exception as e:
+        await context.bot.send_message(chat_id=chat_id,
+                                       text=f"❌ Lỗi khi xóa file: {str(e)}")
 
 
 async def show_win_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -459,15 +498,16 @@ async def show_win_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if user.id in ADMIN_IDS:
         if not win_stats:
-            await update.message.reply_text("📊 Chưa có ai thắng trận nào.")
+            await context.bot.send_message(chat_id=chat_id,
+                                           text="📊 Chưa có ai thắng.")
             return
 
         msg = f"🏆 THỐNG KÊ TOÀN BỘ\n📍Group ID: {chat_id}\n\n"
         for uid, data in win_stats.items():
             name = data["name"]
             count = data["count"]
-            msg += f"- 👤 {name}: {count} Ván\n"
-        await update.message.reply_text(msg)
+            msg += f"👤 {name}: {count} Ván\n"
+        await context.bot.send_message(chat_id=chat_id, text=msg)
 
     else:
         result = {}
@@ -480,20 +520,23 @@ async def show_win_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
         if not result:
-            await update.message.reply_text("📊 Nhóm chưa có ai thắng.")
+            await context.bot.send_message(chat_id=chat_id,
+                                           text="📊 Nhóm chưa có ai thắng.")
             return
 
         msg = f"🏆 BẢNG XẾP HẠNG 🏆:\n"
         for uid, data in result.items():
             name = data["name"]
             count = data["count"]
-            msg += f"- {name}: {count} Ván\n"
-        await update.message.reply_text(msg)
+            msg += f"{name}: {count} Ván\n"
+        await context.bot.send_message(chat_id=chat_id, text=msg)
 
 
 async def show_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "📘 Hướng dẫn:\n\n"
+    chat_id = update.effective_chat.id
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="📘 Hướng dẫn:\n\n"
         "🔹/startgame - Bắt đầu game mới.\n"
         "🔹/join - Tham gia game.\n"
         "🔹/joinbot - Tham gia chơi với bot.\n"
@@ -512,83 +555,104 @@ async def handle_move(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     chat_id = query.message.chat.id
     user = query.from_user
+    game = games.get(chat_id)
 
-    if chat_id not in games:
+    if not game:
         return
-    game = games[chat_id]
 
+    # Validate move
     if game["players"][game["turn"]] != user:
-        await query.message.reply_text("⛔ Không đến lượt bạn!")
+        await context.bot.send_message(chat_id=chat_id,
+                                       text="⛔ Chưa đến lượt bạn!")
         return
 
     x, y = map(int, query.data.split(","))
     if game["board"][y][x] != "▫️":
-        await query.message.reply_text("❗ Ô này đã đánh!")
+        await context.bot.send_message(chat_id=chat_id,
+                                       text="❗ Ô này đã được đánh rồi!")
         return
 
-    symbol = "❌" if game["turn"] == 0 else "⭕"
+    # Make move
+    symbol = "❌" if game["players"][
+        game["turn"]] == game["players"][0] else "⭕"
     game["board"][y][x] = symbol
 
     if game.get("task"):
         game["task"].cancel()
 
-    # ✅ Hiển thị bàn cờ ngay sau khi người chơi đánh
-    await update_board_message(context, chat_id, show_turn=True)
-
+    # Check win condition
     if check_win(game["board"], symbol):
         winner = game["players"][game["turn"]]
-        uid = winner.id if winner != "bot" else 0
-        name = "Bot" if winner == "bot" else winner.full_name
+        winner_id = 0 if winner == "bot" else winner.id
+        winner_name = "🤖 Bot" if winner == "bot" else f"👤 {winner.full_name}"
 
-        if uid not in win_stats:
-            win_stats[uid] = {"name": name, "count": 1}
+        if winner_id not in win_stats:
+            win_stats[winner_id] = {"name": winner_name, "count": 1}
         else:
-            win_stats[uid]["count"] += 1
+            win_stats[winner_id]["count"] += 1
 
-        # ✅ Hiển thị bàn cờ kết thúc, không còn "Đến lượt"
+        # Cập nhật bàn cờ trước khi thông báo
         await update_board_message(context, chat_id, show_turn=False)
-        await query.message.reply_text(f"🏆 CHIẾN THẮNG!🏆\n"
-                                       f"👑 {name} \n"
-                                       f"📊 Thắng:  {win_stats[uid]['count']}")
+
+        # Thông báo chiến thắng
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"🏆 CHIẾN THẮNG! 🏆\n"
+            f"👑 {winner_name}\n"
+            f"📊 Thắng: {win_stats[winner_id]['count']}")
+
+        await context.bot.send_message(chat_id=chat_id,
+                                       text="👉 Gõ /startgame Bắt đầu ván mới.")
+
+        # Xóa game sau cùng
         games.pop(chat_id, None)
         players.pop(chat_id, None)
-        await query.message.reply_text("Gõ /startgame Để tiếp tục.")
         return
 
+    # Switch turn
     game["turn"] = 1 - game["turn"]
+    await update_board_message(context, chat_id, show_turn=True)
 
-    # ✅ Nếu tới lượt bot
+    # Xử lý bot move
     if game.get("bot_play") and game["players"][game["turn"]] == "bot":
         await asyncio.sleep(1)
+
+        thinking_msg = await context.bot.send_message(
+            chat_id=chat_id, text="🤖 Bot đang suy nghĩ...")
+
         move = best_move(game["board"], "⭕")
         if move:
             x, y = move
-            if game["board"][y][x] == "▫️":
-                game["board"][y][x] = "⭕"
-                if check_win(game["board"], "⭕"):
-                    name = "Bot"
-                    if 0 not in win_stats:
-                        win_stats[0] = {"name": name, "count": 1}
-                    else:
-                        win_stats[0]["count"] += 1
+            game["board"][y][x] = "⭕"
 
-                    await update_board_message(context,
-                                               chat_id,
-                                               show_turn=False)
-                    await query.message.reply_text(
-                        f"🏆 CHIẾN THẮNG!🏆\n"
-                        f"🤖 {name} \n"
-                        f"📊 Thắng:  {win_stats[0]['count']}")
-                    games.pop(chat_id, None)
-                    players.pop(chat_id, None)
-                    await query.message.reply_text("Gõ /startgame Để tiếp tục."
-                                                   )
-                    return
+            await context.bot.delete_message(
+                chat_id=chat_id, message_id=thinking_msg.message_id)
 
-                game["turn"] = 0
+            if check_win(game["board"], "⭕"):
+                if 0 not in win_stats:
+                    win_stats[0] = {"name": "🤖 Bot", "count": 1}
+                else:
+                    win_stats[0]["count"] += 1
 
-    # ✅ Cập nhật lại bàn cờ sau khi bot hoặc người đánh
-    await update_board_message(context, chat_id, show_turn=True)
+                # Hiển thị bàn cờ trước
+                await update_board_message(context, chat_id, show_turn=False)
+
+                # Thông báo chiến thắng
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"🏆 CHIẾN THẮNG! 🏆\n"
+                    f"👑 🤖 Bot\n"
+                    f"📊 Thắng: {win_stats[0]['count']}")
+
+                await context.bot.send_message(
+                    chat_id=chat_id, text="👉 Gõ /startgame Bắt đầu ván mới.")
+
+                games.pop(chat_id, None)
+                players.pop(chat_id, None)
+                return
+
+            game["turn"] = 0
+            await update_board_message(context, chat_id, show_turn=True)
 
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
