@@ -1,20 +1,19 @@
-import os  # ok ok tới lượt người chơi với bót rõ ràng
+import os   #ok đánh với bót mượt
 import openpyxl
 from datetime import datetime
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (ApplicationBuilder, CommandHandler,
                           CallbackQueryHandler, ContextTypes)
 from dotenv import load_dotenv
-from telegram.ext import ApplicationBuilder
 from telegram.ext import MessageHandler, filters
 from stay_alive import keep_alive
 import asyncio
 import numpy as np
-import threading
 import math
-
+import random
 
 keep_alive()
+
 # ==================== GLOBAL =====================
 players = {}
 games = {}
@@ -22,30 +21,44 @@ win_stats = {}
 ADMIN_IDS = [5429428390, 5930936939]
 
 
-def score_line(line, symbol):
+def get_possible_moves(board_np):
+    moves = set()
+    for y in range(board_np.shape[0]):
+        for x in range(board_np.shape[1]):
+            if board_np[y][x] != "▫️":  # Nếu ô không trống
+                for dy in range(-1, 2):
+                    for dx in range(-1, 2):
+                        ny, nx = y + dy, x + dx
+                        if 0 <= ny < board_np.shape[
+                                0] and 0 <= nx < board_np.shape[1]:
+                            if board_np[ny][nx] == "▫️":  # Nếu ô trống
+                                moves.add(
+                                    (nx, ny))  # Thêm nước đi vào danh sách
+    return list(moves)
+
+
+def score_line_improved(line, symbol, opp):
     score = 0
     line_str = ''.join(line)
-    opp = "⭕" if symbol == "❌" else "❌"
 
-    if f"{symbol*4}" in line_str:
-        score += 10000
+    # Điểm tấn công (cho symbol)
+    if f"{symbol*4}" in line_str: score += 100000  # Chiến thắng
     elif f"{symbol*3}▫️" in line_str or f"▫️{symbol*3}" in line_str:
-        score += 5000
+        score += 10000
     elif f"{symbol*2}▫️{symbol}" in line_str or f"{symbol}▫️{symbol*2}" in line_str:
+        score += 8000
+    elif f"{symbol*2}▫️▫️" in line_str or f"▫️▫️{symbol*2}" in line_str or f"▫️{symbol*2}▫️" in line_str:
         score += 3000
-    elif f"▫️{symbol*2}▫️" in line_str:
-        score += 2000
-    elif f"{symbol*2}" in line_str:
-        score += 1000
 
+    # Điểm phòng thủ (chặn đối thủ)
     if f"{opp*3}▫️" in line_str or f"▫️{opp*3}" in line_str:
-        score -= 6000
-    elif f"▫️{opp*2}▫️" in line_str:
-        score -= 8000
+        score -= 9000  # Ưu tiên chặn cao hơn
     elif f"{opp*2}▫️{opp}" in line_str or f"{opp}▫️{opp*2}" in line_str:
-        score -= 3000
-    elif f"{opp*2}" in line_str:
-        score -= 1000
+        score -= 8500
+    elif f"▫️{opp*2}▫️" in line_str:
+        score -= 4000
+    elif f"{opp*2}▫️▫️" in line_str or f"▫️▫️{opp*2}" in line_str:
+        score -= 2000
 
     return score
 
@@ -53,35 +66,41 @@ def score_line(line, symbol):
 # Hàm đánh giá tổng thể bàn cờ
 def evaluate_board(board_np, symbol):
     score = 0
-    for row in board_np:
-        score += score_line(row, symbol)
-    for col in board_np.T:
-        score += score_line(col, symbol)
-    for i in range(-board_np.shape[0] + 1, board_np.shape[1]):
-        score += score_line(np.diag(board_np, k=i), symbol)
-        score += score_line(np.diag(np.fliplr(board_np), k=i), symbol)
+    opp = "⭕" if symbol == "❌" else "❌"
 
-    center_positions = [(3, 4), (4, 3), (3, 3), (4, 4)]
+    # 1. Tăng điểm cho các chuỗi dài
+    for row in board_np:
+        score += score_line_improved(row, symbol, opp)
+    for col in board_np.T:
+        score += score_line_improved(col, symbol, opp)
+    for i in range(-board_np.shape[0] + 1, board_np.shape[1]):
+        score += score_line_improved(np.diag(board_np, k=i), symbol, opp)
+        score += score_line_improved(np.diag(np.fliplr(board_np), k=i), symbol,
+                                     opp)  # Sửa ở đây
+
+    # 2. Ưu tiên vị trí trung tâm (quan trọng hơn)
+    center_positions = [(3, 4), (4, 3), (3, 3), (4, 4), (2, 2), (5, 5), (2, 5),
+                        (5, 2)]
     for x, y in center_positions:
-        if board_np[y][x] == symbol:
-            score += 300
+        if 0 <= y < len(board_np) and 0 <= x < len(board_np[0]):
+            if board_np[y][x] == symbol:
+                score += 500  # Tăng điểm lên gần gấp đôi
+            elif board_np[y][x] == opp:
+                score -= 400  # Trừ điểm đối thủ chiếm vị trí tốt
+
+    # 3. Thêm điểm cho các ô xung quanh đã có quân
+    for y in range(len(board_np)):
+        for x in range(len(board_np[0])):
+            if board_np[y][x] == symbol:
+                for dy in [-1, 0, 1]:
+                    for dx in [-1, 0, 1]:
+                        nx, ny = x + dx, y + dy
+                        if 0 <= ny < len(board_np) and 0 <= nx < len(
+                                board_np[0]):
+                            if board_np[ny][nx] == "▫️":
+                                score += 50  # Ưu tiên đánh gần quân mình
 
     return score
-
-
-def get_possible_moves(board_np):
-    moves = set()
-    for y in range(board_np.shape[0]):
-        for x in range(board_np.shape[1]):
-            if board_np[y][x] != "▫️":
-                for dy in range(-1, 2):
-                    for dx in range(-1, 2):
-                        ny, nx = y + dy, x + dx
-                        if 0 <= ny < board_np.shape[
-                                0] and 0 <= nx < board_np.shape[1]:
-                            if board_np[ny][nx] == "▫️":
-                                moves.add((nx, ny))
-    return list(moves)
 
 
 # Thuật toán Minimax với Alpha-Beta Pruning
@@ -126,10 +145,11 @@ def minimax(board_np, depth, alpha, beta, is_maximizing, symbol, opp):
 
 
 # Hàm tính toán nước đi tốt nhất của bot
-def best_move(board, symbol, depth=4):
+def best_move(board, symbol, depth=5):
     board_np = np.array(board)
     opp = "⭕" if symbol == "❌" else "❌"
 
+    # 1. Ưu tiên cao nhất: Nếu có thể thắng ngay thì đánh
     for x, y in get_possible_moves(board_np):
         board_np[y][x] = symbol
         if check_win(board_np.tolist(), symbol):
@@ -137,30 +157,46 @@ def best_move(board, symbol, depth=4):
             return (x, y)
         board_np[y][x] = "▫️"
 
+    # 2. Chặn các đường có 3 điểm liên tiếp của đối thủ (CAO CẤP)
     for x, y in get_possible_moves(board_np):
         board_np[y][x] = opp
         if check_win(board_np.tolist(), opp):
             board_np[y][x] = "▫️"
-            return (x, y)
+            return (x, y)  # Phải chặn ngay lập tức
         board_np[y][x] = "▫️"
 
-    # 🔒 CHẶN ▫️❌❌▫️ hoặc ▫️⭕⭕▫️
-    for y in range(board_np.shape[0]):
-        for x in range(board_np.shape[1]):
-            for dx, dy in [(1, 0), (0, 1), (1, 1), (-1, 1)]:
-                try:
-                    cells = [(x + i * dx, y + i * dy) for i in range(4)]
-                    values = [board_np[yy][xx] for xx, yy in cells]
-                    if values == ["▫️", opp, opp, "▫️"]:
-                        if board_np[cells[0][1]][cells[0][0]] == "▫️":
-                            return cells[0]
-                        if board_np[cells[3][1]][cells[3][0]] == "▫️":
-                            return cells[3]
-                except IndexError:
-                    continue
+    # 3. Chủ động chặn các đường có 2 điểm liên tiếp (QUAN TRỌNG)
+    danger_patterns = [
+        (f"{opp*2}▫️", 5000),  # OO_
+        (f"▫️{opp*2}", 5000),  # _OO
+        (f"{opp}▫️{opp}", 6000),  # O_O (nguy hiểm hơn)
+        (f"▫️{opp}▫️", 3000)  # _O_
+    ]
 
+    best_block = None
+    max_block_score = -1
+
+    for x, y in get_possible_moves(board_np):
+        # Kiểm tra cả 4 hướng (ngang, dọc, chéo)
+        for dx, dy in [(1, 0), (0, 1), (1, 1), (1, -1)]:
+            for pattern, score in danger_patterns:
+                cells = [(x + i * dx, y + i * dy) for i in range(3)]
+                if all(0 <= xx < board_np.shape[1]
+                       and 0 <= yy < board_np.shape[0] for xx, yy in cells):
+                    values = [board_np[yy][xx] for xx, yy in cells]
+                    line_str = ''.join(values)
+                    if pattern in line_str and score > max_block_score:
+                        best_block = (x, y)
+                        max_block_score = score
+
+    if best_block:
+        return best_block
+
+    # 4. Tấn công nếu không có nguy cơ phải chặn
     _, move = minimax(board_np, depth, -math.inf, math.inf, True, symbol, opp)
-    return move
+
+    # 5. Fallback: chọn ngẫu nhiên nếu không có nước tốt
+    return move if move else random.choice(get_possible_moves(board_np))
 
 
 # ============== SAVE TO EXCEL ==============
@@ -416,7 +452,7 @@ async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     path = "data/players.xlsx"
 
     if user_id in ADMIN_IDS:
-        # ADMIN reset: 
+        # ADMIN reset:
         try:
             if os.path.exists(path):
                 os.remove(path)
@@ -437,8 +473,7 @@ async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             players.pop(chat_id, None)
 
         # Xóa thống kê trong nhóm
-        to_delete = [uid for uid in win_stats
-                     if uid != 0]  
+        to_delete = [uid for uid in win_stats if uid != 0]
         for uid in to_delete:
             try:
                 member = await context.bot.get_chat_member(chat_id, uid)
