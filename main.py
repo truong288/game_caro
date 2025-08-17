@@ -25,8 +25,8 @@ games = {}
 win_stats = {}
 game_modes = {}
 
-ADMIN_FILE = "data/admins.json"
-LOG_FILE = "logs/admin_actions.log"
+ADMIN_FILE = "admins.json"
+LOG_FILE = "admin_actions.log"
 
 
 def load_admins():
