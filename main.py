@@ -15,32 +15,9 @@ import random
 from telegram import User
 from telegram.ext import ConversationHandler, MessageHandler, filters
 import json
-#import logging
 
 keep_alive()
 
-#logging.basicConfig(
-#format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-#level=logging.INFO)
-#logger = logging.getLogger(__name__)
-
-#async def safe_send_message(context,
-#chat_id,
-#text,
-#reply_markup=None,
-#parse_mode=None):
-#try:
-#return await context.bot.send_message(chat_id=chat_id,
-#text=text,
-#reply_markup=reply_markup,
-#parse_mode=parse_mode)
-#except telegram.error.RetryAfter as e:
-#print(f"Flood control exceeded. Retry in {e.retry_after} seconds")
-#await asyncio.sleep(e.retry_after)
-#return await safe_send_message(context, chat_id, text, reply_markup,
-#parse_mode)
-#except Exception as e:
-#print(f"Error sending message: {e}")
 BROADCAST_MESSAGE = range(1)
 # ==================== GLOBAL =====================
 players = {}
@@ -1040,6 +1017,5 @@ app.add_handler(
         fallbacks=[CommandHandler("cancel", cancel_broadcast)],
     ))
 app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
-app.add_error_handler(error_handler)
 
 app.run_polling()
