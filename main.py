@@ -434,8 +434,8 @@ def can_make_line(board_np, start_x, start_y, dx, dy, symbol, win_condition):
 
 # ============== SAVE TO EXCEL ==============
 async def save_player_to_excel(name, username, user_id, group_id, time_joined):
-    path = "data/players.xlsx"
-    os.makedirs("data", exist_ok=True)
+    path = "players.xlsx"
+    #os.makedirs("data", exist_ok=True)
     if not os.path.exists(path):
         wb = openpyxl.Workbook()
         sheet = wb.active
@@ -766,7 +766,7 @@ async def join_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
-    path = "data/players.xlsx"
+    path = "players.xlsx"
 
     if user_id in ADMIN_IDS:
         try:
@@ -805,7 +805,7 @@ async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    path = "data/players.xlsx"
+    path = "players.xlsx"
 
     try:
         if not os.path.exists(path):
@@ -825,7 +825,7 @@ async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def delete_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    path = "data/players.xlsx"
+    path = "players.xlsx"
 
     try:
         if not os.path.exists(path):
@@ -1147,7 +1147,7 @@ async def start_broadcast(update, context):
 async def send_broadcast(update, context):
     msg = update.message.text
 
-    path = "data/players.xlsx"
+    path = "players.xlsx"
     if not os.path.exists(path):
         await update.message.reply_text("⚠️ Chưa có dữ liệu người dùng để gửi."
                                         )
