@@ -1,5 +1,5 @@
 import os
-import telegram  #ok đánh với bót mượt
+import telegram  #thử chạy bản củ kết hợp bản mới
 import openpyxl
 from datetime import datetime
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -878,91 +878,7 @@ async def handle_mode_selection(update: Update,
         await handle_mode_selection(update, context)
 
 
-async def handle_mode_selection(update: Update,
-                                context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    chat_id = query.message.chat.id
-    user = query.from_user
-    try:
-        # KIỂM TRA TỒN TẠI TRƯỚC KHI TRUY CẬP
-        if (chat_id in games and "players" in games[chat_id] and any(
-                isinstance(p, User) and p.id == user.id
-                for p in games[chat_id]["players"])):
-            await query.edit_message_text("⛔ Bạn đã tham gia phòng này rồi!")
-            return
-
-        mode = query.data.split("_")[1]
-        win_condition = 4 if mode == "bot" else int(mode)
-        game_modes[chat_id] = win_condition
-
-        if mode == "bot":
-            games[chat_id] = {
-                "board": [["▫️"] * 8 for _ in range(10)],
-                "players": [user, "bot"],
-                "turn": 0,
-                "win_condition": win_condition,
-                "bot_play": True,
-                "created_at": datetime.now()
-            }
-            players[chat_id] = [user.id]
-
-            await save_player_to_excel(user.full_name, user.username, user.id,
-                                       chat_id, datetime.now())
-
-            await asyncio.sleep(1)
-            await query.delete_message()
-            await asyncio.sleep(1)
-
-            current_player = games[chat_id]["players"][0]
-            username = current_player.first_name
-            msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"🎮 Chế độ {win_condition} nước thắng\n"
-                f"👤 {username} ❌ vs 🤖 Bot ⭕\n"
-                f"Đến lượt: {username} ❌",
-                reply_markup=create_board_keyboard(games[chat_id]["board"]))
-
-            games[chat_id]["message_id"] = msg.message_id
-            games[chat_id]["task"] = asyncio.create_task(
-                turn_timeout(context, chat_id))
-
-        else:
-            if (chat_id in games
-                    and len(games[chat_id].get("players", [])) == 1
-                    and "message_id" not in games[chat_id]):
-                # Xóa game cũ nếu đang chờ người thứ 2
-                games.pop(chat_id, None)
-                players.pop(chat_id, None)
-
-            games[chat_id] = {
-                "board": [["▫️"] * 8 for _ in range(10)],
-                "players": [user],
-                "turn": 0,
-                "win_condition": win_condition,
-                "bot_play": False,
-                "created_at": datetime.now()
-            }
-            players[chat_id] = [user.id]
-
-            await save_player_to_excel(user.full_name, user.username, user.id,
-                                       chat_id, datetime.now())
-
-            await query.edit_message_text(
-                text=f"✅ {user.first_name} Tham gia {mode} nước thắng!\n"
-                "👉 Mời người thứ 2 gõ /join\n"
-                "🔄 Nếu muốn đổi chế độ, gõ /startgame lại")
-
-    except telegram.error.RetryAfter as e:
-        print(f"Flood control exceeded. Retry in {e.retry_after} seconds")
-        await asyncio.sleep(e.retry_after)
-        await handle_mode_selection(update, context)
-    except Exception as e:
-        print(f"Error in handle_mode_selection: {e}")
-        await query.edit_message_text("❌ Đã xảy ra lỗi, vui lòng thử lại.")
-
-
-  async def handle_move(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_move(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     chat_id = query.message.chat.id
@@ -1036,7 +952,7 @@ async def handle_mode_selection(update: Update,
                 return
 
             game["turn"] = 0
-            await update_board_message(context, chat_id, show_turn=True)e
+            await update_board_message(context, chat_id, show_turn=True
 
 
 def check_win(board, symbol, win_condition=4):
@@ -1085,7 +1001,7 @@ async def error_handler(update: Update,
     except Exception as e:
         logger.critical(f"Error in error handler: {e}", exc_info=True)
 
-def evaluate_board_advanced
+
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "❓ Lệnh không hợp lệ. Gõ /help xem hướng dẫn.\n\n"
@@ -1095,7 +1011,8 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def start_broadcast(update, context):
-    if update.effective_user.id not in ADMIN_IDS:
+    admins = load_admins()
+    if update.effective_user.id not in admins:
         await update.message.reply_text("⛔ Không có quyền gửi.")
         return ConversationHandler.END
 
@@ -1106,7 +1023,7 @@ async def start_broadcast(update, context):
 async def send_broadcast(update, context):
     msg = update.message.text
 
-    path = "players.xlsx"
+    path = "data/players.xlsx"
     if not os.path.exists(path):
         await update.message.reply_text("⚠️ Chưa có dữ liệu người dùng để gửi."
                                         )
@@ -1117,11 +1034,12 @@ async def send_broadcast(update, context):
 
     user_ids = []
     for cell in sheet['C'][1:]:  # Bỏ dòng tiêu đề (dòng 1)
-      try:
-        user_id = int(cell.value)
-        user_ids.append(user_id)
-      except:
-        continue
+        try:
+            user_id = int(cell.value)
+            user_ids.append(user_id)
+        except:
+            continue
+    count = 0
     for uid in user_ids:
         try:
             await context.bot.send_message(chat_id=uid, text=msg)
