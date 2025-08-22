@@ -434,7 +434,8 @@ def can_make_line(board_np, start_x, start_y, dx, dy, symbol, win_condition):
 
 # ============== SAVE TO EXCEL ==============
 async def save_player_to_excel(name, username, user_id, group_id, time_joined):
-    path = "players.xlsx"
+    path = "data/players.xlsx"
+    os.makedirs("data", exist_ok=True)
     if not os.path.exists(path):
         wb = openpyxl.Workbook()
         sheet = wb.active
@@ -466,9 +467,6 @@ async def save_player_to_excel(name, username, user_id, group_id, time_joined):
 
         if existing_user_id == str(
                 user_id) and existing_group_id == actual_group_id:
-            print(
-                f"User ID {user_id} với Group ID {actual_group_id} đã tồn tại, không thêm nữa."
-            )
             wb.close()
             return
 
@@ -768,7 +766,7 @@ async def join_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
-    path = "players.xlsx"
+    path = "data/players.xlsx"
 
     if user_id in ADMIN_IDS:
         try:
