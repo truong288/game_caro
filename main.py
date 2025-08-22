@@ -1,5 +1,5 @@
 import os
-import telegram  #ok đánh với bót mượt
+import telegram  #thử tìm lỗi sats
 import openpyxl
 from datetime import datetime
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -435,7 +435,6 @@ def can_make_line(board_np, start_x, start_y, dx, dy, symbol, win_condition):
 # ============== SAVE TO EXCEL ==============
 async def save_player_to_excel(name, username, user_id, group_id, time_joined):
     path = "players.xlsx"
-    #os.makedirs("data", exist_ok=True)
     if not os.path.exists(path):
         wb = openpyxl.Workbook()
         sheet = wb.active
@@ -467,6 +466,9 @@ async def save_player_to_excel(name, username, user_id, group_id, time_joined):
 
         if existing_user_id == str(
                 user_id) and existing_group_id == actual_group_id:
+            print(
+                f"User ID {user_id} với Group ID {actual_group_id} đã tồn tại, không thêm nữa."
+            )
             wb.close()
             return
 
@@ -805,7 +807,7 @@ async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    path = "players.xlsx"
+    path = "data/players.xlsx"
 
     try:
         if not os.path.exists(path):
@@ -825,7 +827,7 @@ async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def delete_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    path = "players.xlsx"
+    path = "data/players.xlsx"
 
     try:
         if not os.path.exists(path):
@@ -1147,7 +1149,7 @@ async def start_broadcast(update, context):
 async def send_broadcast(update, context):
     msg = update.message.text
 
-    path = "players.xlsx"
+    path = "data/players.xlsx"
     if not os.path.exists(path):
         await update.message.reply_text("⚠️ Chưa có dữ liệu người dùng để gửi."
                                         )
