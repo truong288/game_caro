@@ -435,6 +435,7 @@ def can_make_line(board_np, start_x, start_y, dx, dy, symbol, win_condition):
 # ============== SAVE TO EXCEL ==============
 async def save_player_to_excel(name, username, user_id, group_id, time_joined):
     path = "players.xlsx"
+    os.makedirs(os.path.dirname(path) if os.path.dirname(path) else ".", exist_ok=True)
     if not os.path.exists(path):
         wb = openpyxl.Workbook()
         sheet = wb.active
@@ -800,7 +801,7 @@ async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    path = "data/players.xlsx"
+    path = "players.xlsx"
 
     try:
         if not os.path.exists(path):
@@ -820,7 +821,7 @@ async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def delete_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    path = "data/players.xlsx"
+    path = "players.xlsx"
 
     try:
         if not os.path.exists(path):
@@ -944,10 +945,6 @@ async def handle_mode_selection(update: Update,
                 "created_at": datetime.now()
             }
             players[chat_id] = [user.id]
-
-            await save_player_to_excel(user.full_name, user.username, user.id,
-                                       chat_id, datetime.now())
-
             await asyncio.sleep(1)
             await query.delete_message()
             await asyncio.sleep(1)
@@ -1142,7 +1139,7 @@ async def start_broadcast(update, context):
 async def send_broadcast(update, context):
     msg = update.message.text
 
-    path = "data/players.xlsx"
+    path = "players.xlsx"
     if not os.path.exists(path):
         await update.message.reply_text("⚠️ Chưa có dữ liệu người dùng để gửi."
                                         )
