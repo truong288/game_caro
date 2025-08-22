@@ -440,55 +440,53 @@ async def save_player_to_excel(full_name, username, user_id, chat_id, timestamp)
     if not os.path.exists(path):
         wb = openpyxl.Workbook()
         sheet = wb.active
-        sheet.append(
-            ["Tên", "Username", "User ID", "Group ID", "Thời gian tham gia"])
+        sheet.append(["Tên", "Username", "User ID", "Group ID", "Thời gian tham gia"])
         wb.save(path)
 
     wb = openpyxl.load_workbook(path)
     sheet = wb.active
 
-    if isinstance(group_id, (int, float)):
-        actual_group_id = str(
-            int(group_id)) if abs(group_id) > 1e10 else str(group_id)
+    # Xử lý chat_id
+    if isinstance(chat_id, (int, float)):
+        actual_chat_id = str(int(chat_id)) if abs(chat_id) > 1e10 else str(chat_id)
     else:
-        actual_group_id = str(group_id)
+        actual_chat_id = str(chat_id)
 
+    # Kiểm tra nếu đã tồn tại
     for row in sheet.iter_rows(min_row=2, values_only=True):
-        if len(row) < 4:  # Đảm bảo row có đủ phần tử
+        if len(row) < 4:
             continue
 
         existing_user_id = str(row[2]) if row[2] is not None else ""
-        existing_group_id = str(row[3]) if row[3] is not None else ""
+        existing_chat_id = str(row[3]) if row[3] is not None else ""
 
-        if existing_group_id.startswith('-') and 'E+' in existing_group_id:
+        if existing_chat_id.startswith('-') and 'E+' in existing_chat_id:
             try:
-                existing_group_id = str(int(float(existing_group_id)))
+                existing_chat_id = str(int(float(existing_chat_id)))
             except:
                 pass
 
-        if existing_user_id == str(
-                user_id) and existing_group_id == actual_group_id:
-            print(
-                f"User ID {user_id} với Group ID {actual_group_id} đã tồn tại, không thêm nữa."
-            )
+        if existing_user_id == str(user_id) and existing_chat_id == actual_chat_id:
+            print(f"User ID {user_id} với Chat ID {actual_chat_id} đã tồn tại, không thêm nữa.")
             wb.close()
             return
 
+    # Ghi dữ liệu mới
     sheet.append([
-        name,
+        full_name,
         username,
         user_id,
-        actual_group_id,  # Lưu Group ID đã được xử lý
-        time_joined.strftime("%d-%m-%Y %H:%M:%S")
+        actual_chat_id,
+        timestamp.strftime("%d-%m-%Y %H:%M:%S")
     ])
 
+    # Định dạng cột Group ID thành chuỗi
     for cell in sheet[sheet.max_row]:
-        if cell.column == 4:  # Cột Group ID
-            cell.number_format = '@'  # Định dạng文本
+        if cell.column == 4:
+            cell.number_format = '@'
 
     wb.save(path)
     wb.close()
-
 
 # ============== BÀN CỜ ==============
 def create_board_keyboard(board):
@@ -587,24 +585,34 @@ async def turn_timeout(context, chat_id):
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user = update.effective_user
-    game = games.get(chat_id)
-    if game and "message_id" in game:
-        for player in game.get("players", []):
-            if hasattr(player, 'id') and player.id == user.id:
-                await context.bot.send_message(chat_id=chat_id,
-                                               text="⚠️ Bạn đang tham gia.")
-                return
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="⚠️ Phòng này đang chơi, vui lòng chờ kết thúc.")
-        return
+    if chat_id in games:
+        game = games[chat_id]
+        if (len(game.get("players", [])) == 1 and "message_id" not in game
+                and game["players"][0].id == user.id):
+            games.pop(chat_id, None)
+            players.pop(chat_id, None)
+        elif (len(game.get("players", [])) == 1 and "message_id" not in game
+              and game["players"][0].id != user.id):
 
-    if game and "message_id" not in game:
-        if game.get("task"):
-            game["task"].cancel()
-        del games[chat_id]
-        players.pop(chat_id, None)
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=
+                "⚠️ Đang chờ người chơi thứ 2 tham gia. Bạn có thể dùng /join")
+            return
+        elif len(game.get("players", [])) >= 2:
+            # Kiểm tra nếu người dùng đã tham gia game này
+            for player in game.get("players", []):
+                if hasattr(player, 'id') and player.id == user.id:
+                    await context.bot.send_message(
+                        chat_id=chat_id, text="⚠️ Bạn đang tham gia.")
+                    return
 
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="⚠️ Phòng này đang chơi, vui lòng chờ kết thúc.")
+            return
+    await save_player_to_excel(user.full_name, user.username, user.id, chat_id,
+                               datetime.now())
     keyboard = InlineKeyboardMarkup([[
         InlineKeyboardButton("Tham gia 4 nước thắng", callback_data="join_4")
     ], [InlineKeyboardButton("Tham gia 5 nước thắng", callback_data="join_5")],
@@ -619,7 +627,16 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                    reply_markup=keyboard)
 
 
+def check_game_ended(game):
+    """Kiểm tra xem game đã kết thúc chưa"""
+    board = game.get("board", [])
+    win_condition = game.get("win_condition", 4)
 
+    # Kiểm tra cả hai symbol
+    if check_win(board, "❌", win_condition) or check_win(
+            board, "⭕", win_condition):
+        return True
+    return False
 async def join_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user = update.effective_user
