@@ -15,7 +15,7 @@ import random
 from telegram import User
 from telegram.ext import ConversationHandler, MessageHandler, filters
 import json
-#import logging
+
 
 keep_alive()
 
