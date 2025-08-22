@@ -435,58 +435,56 @@ def can_make_line(board_np, start_x, start_y, dx, dy, symbol, win_condition):
 # ============== SAVE TO EXCEL ==============
 async def save_player_to_excel(name, username, user_id, group_id, time_joined):
     path = "players.xlsx"
-    os.makedirs(os.path.dirname(path) if os.path.dirname(path) else ".", exist_ok=True)
-    if not os.path.exists(path):
-        wb = openpyxl.Workbook()
+    
+    try:
+        if not os.path.exists(path):
+            wb = openpyxl.Workbook()
+            sheet = wb.active
+            sheet.title = "Người chơi"
+            headers = ["Tên", "Username", "User ID", "Group ID", "Thời gian tham gia"]
+            sheet.append(headers)
+            # Đặt độ rộng cột
+            sheet.column_dimensions['A'].width = 20
+            sheet.column_dimensions['B'].width = 15
+            sheet.column_dimensions['C'].width = 12
+            sheet.column_dimensions['D'].width = 12
+            sheet.column_dimensions['E'].width = 20
+            wb.save(path)
+
+        wb = openpyxl.load_workbook(path)
         sheet = wb.active
-        sheet.append(
-            ["Tên", "Username", "User ID", "Group ID", "Thời gian tham gia"])
+        
+        # Chuẩn hóa group_id
+        normalized_group_id = normalize_group_id(group_id)
+
+        user_exists = False
+        for row in range(2, sheet.max_row + 1):
+            existing_user_id = sheet.cell(row=row, column=3).value
+            existing_group_id = sheet.cell(row=row, column=4).value
+            
+            if (existing_user_id and str(existing_user_id) == str(user_id) and 
+                existing_group_id and str(existing_group_id) == str(normalized_group_id)):
+                user_exists = True
+                break
+        
+        # Thêm người dùng mới nếu chưa tồn tại
+        if not user_exists:
+            new_row = [
+                name,
+                username if username else "Không có",
+                user_id,
+                normalized_group_id,
+                time_joined.strftime("%d-%m-%Y %H:%M:%S")
+            ]
+            sheet.append(new_row)
+            print(f"Đã thêm người chơi: {name} (ID: {user_id})")
+        
+        # Lưu file
         wb.save(path)
-
-    wb = openpyxl.load_workbook(path)
-    sheet = wb.active
-
-    if isinstance(group_id, (int, float)):
-        actual_group_id = str(
-            int(group_id)) if abs(group_id) > 1e10 else str(group_id)
-    else:
-        actual_group_id = str(group_id)
-
-    for row in sheet.iter_rows(min_row=2, values_only=True):
-        if len(row) < 4:  # Đảm bảo row có đủ phần tử
-            continue
-
-        existing_user_id = str(row[2]) if row[2] is not None else ""
-        existing_group_id = str(row[3]) if row[3] is not None else ""
-
-        if existing_group_id.startswith('-') and 'E+' in existing_group_id:
-            try:
-                existing_group_id = str(int(float(existing_group_id)))
-            except:
-                pass
-
-        if existing_user_id == str(
-                user_id) and existing_group_id == actual_group_id:
-            print(
-                f"User ID {user_id} với Group ID {actual_group_id} đã tồn tại, không thêm nữa."
-            )
-            wb.close()
-            return
-
-    sheet.append([
-        name,
-        username,
-        user_id,
-        actual_group_id,  # Lưu Group ID đã được xử lý
-        time_joined.strftime("%d-%m-%Y %H:%M:%S")
-    ])
-
-    for cell in sheet[sheet.max_row]:
-        if cell.column == 4:  # Cột Group ID
-            cell.number_format = '@'  # Định dạng文本
-
-    wb.save(path)
-    wb.close()
+        wb.close()
+        
+    except Exception as e:
+        print(f"Lỗi khi lưu dữ liệu Excel: {str(e)}")
 
 
 # ============== BÀN CỜ ==============
@@ -801,22 +799,42 @@ async def reset_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    
+    # Kiểm tra quyền admin
+    admins = load_admins()
+    if user_id not in admins:
+        await update.message.reply_text("⛔ Bạn không có quyền sử dụng lệnh này.")
+        return
+    
     path = "players.xlsx"
-
+    
+    # Kiểm tra nếu file tồn tại và có dữ liệu
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        await update.message.reply_text("⚠️ Chưa có dữ liệu người chơi để xuất.")
+        return
+    
     try:
-        if not os.path.exists(path):
-            await context.bot.send_message(chat_id=chat_id,
-                                           text="⚠️ Chưa có dữ liệu.")
+        wb = openpyxl.load_workbook(path)
+        sheet = wb.active
+        
+        if sheet.max_row <= 1:  # Chỉ có tiêu đề
+            await update.message.reply_text("⚠️ File chỉ có tiêu đề, không có dữ liệu.")
+            wb.close()
             return
 
         with open(path, "rb") as file:
-            await context.bot.send_document(chat_id=chat_id,
-                                            document=file,
-                                            filename="players_data.xlsx",
-                                            caption="📊 Dữ liệu người chơi")
+            await context.bot.send_document(
+                chat_id=chat_id,
+                document=file,
+                filename="players_data.xlsx",
+                caption="📊 Dữ liệu người chơi"
+            )
+            
     except Exception as e:
-        await context.bot.send_message(
-            chat_id=chat_id, text=f"❌ Lỗi khi xuất dữ liệu: {str(e)}")
+        error_msg = f"❌ Lỗi khi xuất dữ liệu: {str(e)}"
+        print(error_msg)
+        await update.message.reply_text(error_msg)
 
 
 async def delete_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
