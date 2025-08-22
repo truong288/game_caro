@@ -1,5 +1,5 @@
 import os
-import telegram  #ok đánh với bót mượt với đầy đủ tính năng
+import telegram  #ok đánh với bót mượt
 import openpyxl
 from datetime import datetime
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -15,9 +15,34 @@ import random
 from telegram import User
 from telegram.ext import ConversationHandler, MessageHandler, filters
 import json
-
+import logging
 
 keep_alive()
+
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+async def safe_send_message(context,
+                            chat_id,
+                            text,
+                            reply_markup=None,
+                            parse_mode=None):
+    try:
+        return await context.bot.send_message(chat_id=chat_id,
+                                              text=text,
+                                              reply_markup=reply_markup,
+                                              parse_mode=parse_mode)
+    except RetryAfter as e:
+        print(f"Flood control exceeded. Retry in {e.retry_after} seconds")
+        await asyncio.sleep(e.retry_after)
+        return await safe_send_message(context, chat_id, text, reply_markup,
+                                       parse_mode)
+    except Exception as e:
+        print(f"Error sending message: {e}")
+        return None
 
 
 BROADCAST_MESSAGE = range(1)
@@ -410,7 +435,6 @@ def can_make_line(board_np, start_x, start_y, dx, dy, symbol, win_condition):
 # ============== SAVE TO EXCEL ==============
 async def save_player_to_excel(name, username, user_id, group_id, time_joined):
     path = "data/players.xlsx"
-    #os.makedirs(os.path.dirname(path), exist_ok=True)
     os.makedirs("data", exist_ok=True)
 
     if not os.path.exists(path):
