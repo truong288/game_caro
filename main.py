@@ -585,47 +585,69 @@ async def turn_timeout(context, chat_id):
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user = update.effective_user
+
     if chat_id in games:
         game = games[chat_id]
-        if (len(game.get("players", [])) == 1 and "message_id" not in game
-                and game["players"][0].id == user.id):
+
+        # Nếu chỉ có 1 người chơi và chính là người đó -> xóa phòng
+        if (len(game.get("players", [])) == 1 and 
+            "message_id" not in game and 
+            game["players"][0].id == user.id):
+            
             games.pop(chat_id, None)
             players.pop(chat_id, None)
-        elif (len(game.get("players", [])) == 1 and "message_id" not in game
-              and game["players"][0].id != user.id):
 
+        # Nếu 1 người khác đang chờ
+        elif (len(game.get("players", [])) == 1 and 
+              "message_id" not in game and 
+              game["players"][0].id != user.id):
+            
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=
-                "⚠️ Đang chờ người chơi thứ 2 tham gia. Bạn có thể dùng /join")
+                text="⚠️ Đang chờ người chơi thứ 2 tham gia. Bạn có thể dùng /join"
+            )
             return
+
+        # Nếu đã có 2 người chơi
         elif len(game.get("players", [])) >= 2:
-            # Kiểm tra nếu người dùng đã tham gia game này
             for player in game.get("players", []):
                 if hasattr(player, 'id') and player.id == user.id:
                     await context.bot.send_message(
-                        chat_id=chat_id, text="⚠️ Bạn đang tham gia.")
+                        chat_id=chat_id,
+                        text="⚠️ Bạn đang tham gia."
+                    )
                     return
 
             await context.bot.send_message(
                 chat_id=chat_id,
-                text="⚠️ Phòng này đang chơi, vui lòng chờ kết thúc.")
+                text="⚠️ Phòng này đang chơi, vui lòng chờ kết thúc."
+            )
             return
-    await save_player_to_excel(user.full_name, user.username, user.id, chat_id,
-                               datetime.now())
-    keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("Tham gia 4 nước thắng", callback_data="join_4")
-    ], [InlineKeyboardButton("Tham gia 5 nước thắng", callback_data="join_5")],
-                                     [
-                                         InlineKeyboardButton(
-                                             "Chơi với bot (4 nước thắng)",
-                                             callback_data="join_bot")
-                                     ]])
 
-    await context.bot.send_message(chat_id=chat_id,
-                                   text="🎮 Chọn chế độ chơi:",
-                                   reply_markup=keyboard)
+    # Lưu người chơi vào Excel (nếu chưa có)
+    try:
+        await save_player_to_excel(
+            user.full_name,
+            user.username,
+            user.id,
+            chat_id,
+            datetime.now()
+        )
+    except Exception as e:
+        print(f"[!] Lỗi khi lưu thông tin người chơi: {e}")
 
+    # Gửi menu chọn chế độ chơi
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Tham gia 4 nước thắng", callback_data="join_4")],
+        [InlineKeyboardButton("Tham gia 5 nước thắng", callback_data="join_5")],
+        [InlineKeyboardButton("Chơi với bot (4 nước thắng)", callback_data="join_bot")]
+    ])
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="🎮 Chọn chế độ chơi:",
+        reply_markup=keyboard
+    )
 
 def check_game_ended(game):
     """Kiểm tra xem game đã kết thúc chưa"""
