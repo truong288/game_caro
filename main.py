@@ -433,7 +433,7 @@ def can_make_line(board_np, start_x, start_y, dx, dy, symbol, win_condition):
 
 
 # ============== SAVE TO EXCEL ==============
-async def save_player_to_excel(name, username, user_id, group_id, time_joined):
+async def save_player_to_excel(full_name, username, user_id, chat_id, timestamp):
     path = "data/players.xlsx"
     os.makedirs("data", exist_ok=True)
 
